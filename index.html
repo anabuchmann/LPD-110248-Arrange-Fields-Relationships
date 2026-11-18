@@ -97,6 +97,8 @@ tr.is-moved td { background: var(--color-primary-l3); }
 .arrange-card__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); margin: 0 0 var(--spacing-2); }
 .arrange-card__inner { padding: var(--spacing-5) var(--spacing-6) var(--spacing-6); display: flex; flex-direction: column; gap: var(--spacing-4); }
 .arrange .side-panel__footer { justify-content: flex-start; }
+.arrange-page { max-width: 1100px; margin: 0 auto; padding-top: var(--spacing-7); }
+.arrange-page__actions { display: flex; gap: var(--spacing-3); margin-top: var(--spacing-5); padding-bottom: var(--spacing-9); }
 .arrange .side-panel__footer .push { margin-left: auto; }
 
 /* API preview */
@@ -187,7 +189,12 @@ body.api-open .proto-controls { right: calc(480px + var(--spacing-7)); }
 
 <!-- Prototype controls — not part of the product UI -->
 <div class="proto-controls" role="group" aria-label="Prototype Controls">
-	<span class="proto-controls__label">Prototype</span>
+	<span class="proto-controls__label">Variant</span>
+	<div class="btn-group" id="variantGroup">
+		<button class="btn btn--secondary btn--xs" type="button" data-variant="A">A. Arrange Panel</button>
+		<button class="btn btn--secondary btn--xs" type="button" data-variant="B">B. Unified Tab</button>
+		<button class="btn btn--secondary btn--xs" type="button" data-variant="C">C. Arrange Tab</button>
+	</div>
 	<button class="btn btn--borderless btn--xs" type="button" data-action="toggleApi"><svg class="lexicon-icon lexicon-icon-sm"><use href="#code"></use></svg>API Preview</button>
 	<button class="btn btn--borderless btn--xs" type="button" data-action="reset"><svg class="lexicon-icon lexicon-icon-sm"><use href="#reload"></use></svg>Reset</button>
 </div>
@@ -229,8 +236,8 @@ const TYPE_ICON = {'Text':'text','Long Text':'paragraph','Date':'calendar','Date
 
 /* ══════════ State ══════════ */
 let S;
-function init() {
-	S = {view:'objects', def:'thread', tab:'fields', sort:null, q:'', filter:'all', panel:null, api:false, undo:null, data:{}};
+function init(variant) {
+	S = {variant: variant || 'A', view:'objects', def:'thread', tab:'fields', sort:null, q:'', filter:'all', panel:null, arr:null, confirm:null, api:false, undo:null, data:{}};
 	for (const k in DEFS) S.data[k] = {ordered:false, items: DEFS[k].items.map((i, idx) => ({...i, priority:0, created:idx}))};
 }
 init();
@@ -274,6 +281,7 @@ function pagination(n) {
 
 /* ══════════ Render ══════════ */
 function render() {
+	document.querySelectorAll('[data-variant]').forEach(b => { const on = b.dataset.variant === S.variant; b.classList.toggle('is-active', on); b.setAttribute('aria-pressed', on); });
 	document.body.classList.toggle('api-open', S.api);
 	const back = S.view === 'definition' ? `<button class="control-menu__btn" type="button" aria-label="Back" data-action="goObjects">${ic('angle-left')}</button>` : '';
 	$('#cmBtns').innerHTML = `<button class="control-menu__btn" type="button" aria-label="Toggle Product Menu" data-action="toggleCp">${ic(document.body.classList.contains('cp-collapsed') ? 'product-menu-closed' : 'product-menu-open')}</button>${back}`;
@@ -312,10 +320,16 @@ function renderObjects() {
 }
 
 function renderDefinition() {
-	const tabs = [['details','Details'],['fields','Fields'],['relationships','Relationships'],['layouts','Layouts'],['actions','Actions'],['views','Views'],['validations','Validations'],['state','State Manager']];
+	const tabs = S.variant === 'A'
+		? [['details','Details'],['fields','Fields'],['relationships','Relationships'],['layouts','Layouts'],['actions','Actions'],['views','Views'],['validations','Validations'],['state','State Manager']]
+		: S.variant === 'C'
+		? [['details','Details'],['fields','Fields'],['relationships','Relationships'],['arrange','Arrange'],['layouts','Layouts'],['actions','Actions'],['views','Views'],['validations','Validations'],['state','State Manager']]
+		: [['details','Details'],['fields','Fields and Relationships'],['layouts','Layouts'],['actions','Actions'],['views','Views'],['validations','Validations'],['state','State Manager']];
+	if (S.variant === 'B' && S.tab === 'relationships') S.tab = 'fields';
 	let body;
-	if (S.tab === 'fields' || S.tab === 'relationships') body = renderA();
-	else body = `<div class="empty-state" style="padding-top: var(--spacing-9)"><div class="empty-state__media"><img src="illustration-telescope.svg" alt=""></div><h2 class="empty-state__title">Not Part of This Prototype</h2><p class="empty-state__text">Open the Fields or Relationships tab.</p></div>`;
+	if (S.tab === 'arrange' && S.variant === 'C') body = renderArrangeTab();
+	else if (S.tab === 'fields' || S.tab === 'relationships') body = S.variant === 'B' ? renderB() : renderA();
+	else body = `<div class="empty-state" style="padding-top: var(--spacing-9)"><div class="empty-state__media"><img src="illustration-telescope.svg" alt=""></div><h2 class="empty-state__title">Not Part of This Prototype</h2><p class="empty-state__text">Open the ${S.variant==='B'?'Fields and Relationships tab':S.variant==='C'?'Fields, Relationships or Arrange tab':'Fields or Relationships tab'}.</p></div>`;
 	return `<div class="def-header">
 			<div><h1 class="def-header__name">${def().label}</h1>
 				<span class="label label--sm label--case label--bold label--secondary">Standard</span> <span class="label label--sm label--case label--warning">Custom</span></div>
@@ -355,7 +369,7 @@ function renderA() {
 			<thead><tr><th>${sortHead('Label')}</th><th>Related Object</th><th>Type</th><th>Hierarchy</th><th>Permission Inheritance</th><th>Source</th>${colsGutter}</tr></thead>`;
 	const sortBar = S.sort ? `<div class="management-toolbar__results"><span class="management-toolbar__results-text">Sorted by label for viewing only. The saved order did not change.</span><button class="management-toolbar__results-clear btn btn--borderless btn--sm" type="button" data-action="clearSort">Show Saved Order</button></div>` : '';
 	return `<div class="management-toolbar"><div class="management-toolbar__bar">${search('Search', S.q)}
-			<button class="btn btn--secondary btn--sm" type="button" data-action="openArrange">Arrange</button>
+			${S.variant === 'A' ? '<button class="btn btn--secondary btn--sm" type="button" data-action="openArrange">Arrange</button>' : ''}
 			<button class="btn btn--primary btn--sm" type="button" data-action="add">${isF ? 'Add Object Field' : 'Add Object Relationship'}</button></div>${sortBar}</div>
 		<table class="table table--hover" aria-label="${isF ? 'Fields' : 'Relationships'}">${head}<tbody>${rows}</tbody></table>
 		${pagination(list.length)}`;
@@ -363,15 +377,15 @@ function renderA() {
 
 /* ── Arrange side panel (View Builder pattern) ── */
 function openArrange() {
-	S.panel = {list: ordered(dat().items).map(i => ({...i})), moved: new Set(), q:'', reset:false};
+	S.panel = freshDraft();
 	render();
 	setTimeout(() => { const t = $('.arrange .side-panel__close'); if (t) t.focus(); }, 0);
 }
-function renderPanel() {
-	const root = $('#lpdOverlay');
-	if (!S.panel) { root.innerHTML = ''; return; }
-	if (S.panel.type === 'add') return renderAddModal(root);
-	const P = S.panel, q = P.q.trim().toLowerCase(), N = P.list.length;
+const draft = () => (S.panel && S.panel.list) ? S.panel : S.arr;
+const freshDraft = () => ({def: S.def, list: ordered(dat().items).map(i => ({...i})), moved: new Set(), q:''});
+const dirtyArr = () => !!(S.arr && S.arr.moved.size);
+function arrangeCard(P, title) {
+	const q = P.q.trim().toLowerCase(), N = P.list.length;
 	const rows = P.list.map((i, idx) => {
 		if (q && !i.label.toLowerCase().includes(q) && !i.key.toLowerCase().includes(q)) return '';
 		const moved = P.moved.has(i.key);
@@ -387,37 +401,58 @@ function renderPanel() {
 				ddItem('Move Down', `data-action="pMove" data-from="${idx}" data-to="${idx+1}"`, idx===N-1) +
 				ddItem('Move to Bottom', `data-action="pMove" data-from="${idx}" data-to="${N-1}"`, idx===N-1))}</td></tr>`;
 	}).join('');
+	return `<section class="arrange-card">
+		<div class="arrange-card__head"><h3 class="arrange-card__title">${title}</h3>
+			<p style="margin:0">Drag items, or use the actions menu, to set the order of fields and relationships for ${def().label}. The API and the default entry form use this order.</p></div>
+		<div class="arrange-card__inner">
+			${!dat().ordered ? `<div class="alert alert--info"><div class="alert__content">${ic('info-circle')}<p class="alert__text">This object was never arranged. Items are listed by creation date.</p></div></div>` : ''}
+			<div class="search"><input class="input__field search__field" type="search" placeholder="Search" aria-label="Search Fields and Relationships" id="pq" value="${esc(P.q)}"><button class="search__submit" aria-label="Search" type="button">${ic('search')}</button></div>
+			${q ? `<div class="alert alert--warning"><div class="alert__content">${ic('warning-full')}<p class="alert__text">Dragging is off while searching. Use the actions menu, or clear the search.</p></div></div>` : ''}
+			<table class="table table--builder" aria-label="Fields and Relationships Order">
+				<colgroup><col style="width:56px"><col><col style="width:30%"><col style="width:18%"><col style="width:56px"></colgroup>
+				<thead><tr><th class="table__cell--gutter" aria-label="Drag"></th><th>Name</th><th>Type</th><th>Source</th><th class="cell-actions"></th></tr></thead>
+				<tbody id="panelBody">${rows}</tbody></table>
+		</div>
+	</section>`;
+}
+function renderPanel() {
+	const root = $('#lpdOverlay');
+	if (S.confirm) {
+		root.innerHTML = `<div class="modal-overlay"><div class="modal modal--warning" role="alertdialog" aria-modal="true" aria-labelledby="cfTitle">
+			<header class="modal__header"><h2 class="modal__title" id="cfTitle">Discard Changes?</h2>
+				<button class="btn btn--borderless btn--icon modal__close" type="button" aria-label="Close" data-action="stay">${ic('times')}</button></header>
+			<div class="modal__body"><p style="margin:0">You moved fields or relationships but did not save. If you leave, the changes are lost.</p></div>
+			<footer class="modal__footer"><button class="btn btn--secondary" type="button" data-action="stay">Keep Editing</button><button class="btn btn--primary btn--warning" type="button" data-action="leave">Discard</button></footer>
+		</div></div>`;
+		return;
+	}
+	if (!S.panel) { root.innerHTML = ''; return; }
+	if (S.panel.type === 'add') return renderAddModal(root);
 	root.innerHTML = `<div class="scrim" data-action="closePanel"></div>
 	<aside class="side-panel arrange" role="dialog" aria-modal="true" aria-labelledby="arrTitle">
 		<header class="side-panel__header"><h2 class="side-panel__title" id="arrTitle">Arrange Fields and Relationships</h2>
 			<button class="btn btn--borderless btn--icon side-panel__close" type="button" aria-label="Close" data-action="closePanel">${ic('times')}</button></header>
-		<div class="side-panel__body">
-			<section class="arrange-card">
-				<div class="arrange-card__head"><h3 class="arrange-card__title">Order</h3>
-					<p style="margin:0">Drag items, or use the actions menu, to set the order of fields and relationships for ${def().label}. The API and the default entry form use this order.</p></div>
-				<div class="arrange-card__inner">
-					${!dat().ordered ? `<div class="alert alert--info"><div class="alert__content">${ic('info-circle')}<p class="alert__text">This object was never arranged. Items are listed by creation date.</p></div></div>` : ''}
-					<div class="search"><input class="input__field search__field" type="search" placeholder="Search" aria-label="Search Fields and Relationships" id="pq" value="${esc(P.q)}"><button class="search__submit" aria-label="Search" type="button">${ic('search')}</button></div>
-					${q ? `<div class="alert alert--warning"><div class="alert__content">${ic('warning-full')}<p class="alert__text">Dragging is off while searching. Use the actions menu, or clear the search.</p></div></div>` : ''}
-					<table class="table table--builder" aria-label="Fields and Relationships Order">
-						<colgroup><col style="width:56px"><col><col style="width:30%"><col style="width:18%"><col style="width:56px"></colgroup>
-						<thead><tr><th class="table__cell--gutter" aria-label="Drag"></th><th>Name</th><th>Type</th><th>Source</th><th class="cell-actions"></th></tr></thead>
-						<tbody id="panelBody">${rows}</tbody></table>
-				</div>
-			</section>
-		</div>
+		<div class="side-panel__body">${arrangeCard(S.panel, 'Order')}</div>
 		<footer class="side-panel__footer">
 			<button class="btn btn--secondary" type="button" data-action="closePanel">Cancel</button>
 			<button class="btn btn--primary" type="button" data-action="savePanel">Save</button>
 		</footer>
 	</aside>`;
-	const pq = $('#pq');
-	pq.oninput = e => { P.q = e.target.value; renderPanel(); bindDrag(); const n = $('#pq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
 }
 function movePanel(from, to) {
-	const L = S.panel.list; if (to < 0 || to >= L.length || from === to) return;
-	const [it] = L.splice(from, 1); L.splice(to, 0, it); S.panel.moved.add(it.key); S.panel.reset = false;
-	renderPanel(); bindDrag();
+	const P = draft(), L = P.list; if (to < 0 || to >= L.length || from === to) return;
+	const [it] = L.splice(from, 1); L.splice(to, 0, it); P.moved.add(it.key);
+	if (P === S.panel) { renderPanel(); bindDrag(); } else render();
+}
+function saveDraft(P) {
+	const d = dat();
+	P.list.forEach((p, idx) => d.items.find(x => x.key === p.key).priority = idx + 1); d.ordered = true;
+}
+/* ── Variant C: Arrange as its own tab ── */
+function renderArrangeTab() {
+	if (!S.arr || S.arr.def !== S.def) S.arr = freshDraft();
+	return `<div class="arrange-page">${arrangeCard(S.arr, 'Fields and Relationships Order')}
+		<div class="arrange-page__actions"><button class="btn btn--secondary" type="button" data-action="cancelArr">Cancel</button><button class="btn btn--primary" type="button" data-action="saveArr">Save</button></div></div>`;
 }
 
 /* ── Add field / relationship (shows "added at the end") ── */
@@ -442,9 +477,57 @@ function saveNew() {
 	const key = label.replace(/\W+(.)?/g, (m,c) => c ? c.toUpperCase() : '').replace(/^./, c => c.toLowerCase());
 	d.items.push(S.panel.rel ? {key, label, type:'oneToMany', kind:'relationship', source:'Custom', related:type, hierarchy:'Parent', priority:max+1, created:d.items.length}
 		: {key, label, type, kind:'field', source:'Custom', priority:max+1, created:d.items.length});
-	S.panel = null; toast(`${esc(label)} was added at the end of the order.`); render();
+	S.panel = null; toast(`<strong>Success:</strong> ${esc(label)} was added at the end of the ${def().label} order.`); render();
 }
 function materialize() { const d = dat(); ordered(d.items).forEach((i, idx) => i.priority = idx + 1); d.ordered = true; }
+
+/* ── Variant B: one tab, arrange in place ── */
+function renderB() {
+	const all = ordered(dat().items);
+	let list = all.filter(i => S.filter === 'all' || (S.filter === 'fields' ? i.kind === 'field' : isRel(i)));
+	list = filterQ(list);
+	const locked = !!(S.q || S.filter !== 'all'), N = all.length;
+	const rows = list.map(i => {
+		const idx = all.findIndex(x => x.key === i.key);
+		const type = isRel(i)
+			? `Relationship ${hierLabel(i.hierarchy)}`
+			: i.type;
+		const moves = locked ? '' :
+			ddItem('Move to Top', `data-action="bMove" data-from="${idx}" data-to="0"`, idx===0) +
+			ddItem('Move Up', `data-action="bMove" data-from="${idx}" data-to="${idx-1}"`, idx===0) +
+			ddItem('Move Down', `data-action="bMove" data-from="${idx}" data-to="${idx+1}"`, idx===N-1) +
+			ddItem('Move to Bottom', `data-action="bMove" data-from="${idx}" data-to="${N-1}"`, idx===N-1) +
+			'<li class="dropdown__divider" role="separator"></li>';
+		return `<tr draggable="${locked?'false':'true'}" data-idx="${idx}" data-zone="b">
+			<td class="table__cell--gutter"><button class="btn btn--borderless btn--sm btn--icon drag-handle" type="button" ${locked?'disabled':''} aria-label="Drag ${esc(i.label)}" title="${locked?'Clear search and filters to arrange':'Drag to arrange'}">${ic('drag')}</button></td>
+			<td>${itemCell(i)}</td><td>${type}</td><td>${i.related || ''}</td>
+			<td>${i.kind==='relationship' ? '<span class="item-sub">Not applicable</span>' : (i.mandatory?'Yes':'No')}</td>
+			<td>${srcLabel(i.source)}</td>
+			<td class="cell-actions table__cell--gutter">${kebab('b-'+i.key, moves + ddItem('Edit') + (i.source==='Custom' && i.kind!=='relField' ? ddItem('Delete') : ''))}</td></tr>`;
+	}).join('');
+	const fLabel = {all:'All', fields:'Fields', relationships:'Relationships'}[S.filter];
+	const results = locked ? `<div class="management-toolbar__results"><span class="management-toolbar__results-text">${list.length} results${S.filter!=='all' ? ` for ${fLabel}` : ''}${S.q ? ` matching "${esc(S.q)}"` : ''}. Arranging is off while a search or filter is active.</span><button class="management-toolbar__results-clear btn btn--borderless btn--sm" type="button" data-action="clearFilters">Clear</button></div>` : '';
+	return `<div class="management-toolbar"><div class="management-toolbar__bar">
+			<span class="dd dd--left" data-dd="filter"><button class="btn btn--borderless btn--sm" type="button" data-action="dd" data-id="filter">${ic('filter')}Filter${ic('caret-bottom','lexicon-icon-sm')}</button>
+				<ul class="dropdown" role="menu">${['all','fields','relationships'].map(f => `<li><button class="dropdown__item ${S.filter===f?'is-active':''}" type="button" data-action="setFilter" data-v="${f}"><span class="dropdown__item-text">${({all:'All',fields:'Fields',relationships:'Relationships'})[f]}</span>${S.filter===f ? ic('check','dropdown__item-meta') : ''}</button></li>`).join('')}</ul></span>
+			${search('Search', S.q)}
+			<span class="dd" data-dd="new"><button class="btn btn--primary btn--sm" type="button" data-action="dd" data-id="new">New${ic('caret-bottom','lexicon-icon-sm')}</button>
+				<ul class="dropdown" role="menu">${ddItem('Field', 'data-action="add" data-rel="0"')}${ddItem('Relationship', 'data-action="add" data-rel="1"')}</ul></span>
+		</div>${results}</div>
+		${!dat().ordered && !locked ? `<p class="hint">${ic('info-circle')}This object was never arranged. Items are listed by creation date. Drag a row to set the order.</p>` : ''}
+		<table class="table table--hover" aria-label="Fields and Relationships">
+			<colgroup><col style="width:56px"><col><col style="width:20%"><col style="width:15%"><col style="width:12%"><col style="width:12%"><col style="width:64px"></colgroup>
+			<thead><tr><th class="table__cell--gutter" aria-label="Drag"></th><th>Label</th><th>Type</th><th>Related Object</th><th>Mandatory</th><th>Source</th>${colsGutter}</tr></thead>
+			<tbody>${rows}</tbody></table>
+		${pagination(list.length)}`;
+}
+function moveB(from, to) {
+	const all = ordered(dat().items); if (to < 0 || to >= all.length || from === to) return;
+	S.undo = {def: S.def, keys: all.map(i => i.key)};
+	const [it] = all.splice(from, 1); all.splice(to, 0, it);
+	all.forEach((i, idx) => i.priority = idx + 1); dat().ordered = true;
+	toast(`<strong>Success:</strong> ${esc(it.label)} was moved. The new order of ${def().label} fields and relationships was saved.`, true); render();
+}
 
 /* ── API preview ── */
 function renderApi() {
@@ -475,7 +558,7 @@ function bindDrag() {
 		tr.addEventListener('dragover', e => { e.preventDefault(); tr.classList.add('drop-target'); });
 		tr.addEventListener('dragleave', () => tr.classList.remove('drop-target'));
 		tr.addEventListener('drop', e => { e.preventDefault(); tr.classList.remove('drop-target'); const to = +tr.dataset.idx; if (from === null) return;
-			movePanel(from, to); from = null; });
+			if (tr.dataset.zone === 'panel') movePanel(from, to); else moveB(from, to); from = null; });
 	});
 }
 
@@ -490,11 +573,17 @@ function toast(msg, undo) {
 
 /* ══════════ Events ══════════ */
 document.addEventListener('click', e => {
-	const t = e.target.closest('[data-action]');
+	const t = e.target.closest('[data-action],[data-variant]');
 	document.querySelectorAll('.dd.is-open').forEach(d => { if (!t || t.dataset.action !== 'dd' || d.dataset.dd !== t.dataset.id) d.classList.remove('is-open'); });
 	if (!t) return;
+	if (t.dataset.variant) { S.variant = t.dataset.variant; S.tab = 'fields'; S.q = ''; S.sort = null; S.filter = 'all'; S.panel = null; S.arr = null; S.confirm = null; render(); return; }
 	const a = t.dataset.action;
 	if (t.tagName === 'A') e.preventDefault();
+	// Leaving the Arrange tab with unsaved moves asks first
+	if ((a === 'goObjects' || (a === 'tab' && t.dataset.tab !== 'arrange')) && S.tab === 'arrange' && dirtyArr()) {
+		S.confirm = {a, ds: {...t.dataset}}; renderPanel(); return;
+	}
+	if (a === 'tab' || a === 'goObjects') S.arr = null;
 	switch (a) {
 		case 'dd': t.closest('.dd').classList.toggle('is-open'); break;
 		case 'toggleCp': document.body.classList.toggle('cp-collapsed'); render(); break;
@@ -509,22 +598,37 @@ document.addEventListener('click', e => {
 		case 'pMove': movePanel(+t.dataset.from, +t.dataset.to); break;
 		case 'savePanel': {
 			const d = dat();
-			S.panel.list.forEach((p, idx) => d.items.find(x => x.key === p.key).priority = idx + 1); d.ordered = true;
-			S.panel = null; toast('Order saved.'); render(); break; }
+			saveDraft(S.panel);
+			S.panel = null; toast(`<strong>Success:</strong> The order of ${def().label} fields and relationships was saved.`); render(); break; }
+		case 'saveArr': saveDraft(S.arr); S.arr = null; toast(`<strong>Success:</strong> The order of ${def().label} fields and relationships was saved.`); render(); break;
+		case 'cancelArr': S.arr = null; render(); break;
+		case 'stay': S.confirm = null; renderPanel(); break;
+		case 'leave': { const c = S.confirm; S.confirm = null; S.arr = null;
+			if (c.a === 'tab') { S.tab = c.ds.tab; S.q = ''; S.sort = null; } else { S.view = 'objects'; S.panel = null; }
+			render(); break; }
 		case 'add': S.panel = {type:'add', rel: t.dataset.rel ? t.dataset.rel === '1' : S.tab === 'relationships'}; render(); break;
 		case 'saveNew': saveNew(); break;
+		case 'setFilter': S.filter = t.dataset.v; render(); break;
+		case 'clearFilters': S.filter = 'all'; S.q = ''; render(); break;
+		case 'bMove': moveB(+t.dataset.from, +t.dataset.to); break;
+		case 'undo': if (S.undo) { const d = S.data[S.undo.def]; S.undo.keys.forEach((k, idx) => d.items.find(x => x.key === k).priority = idx + 1); S.undo = null; $('#toasts').innerHTML = ''; render(); } break;
 		case 'closeToast': $('#toasts').innerHTML = ''; break;
 		case 'toggleApi': if (S.view !== 'definition') { toast('Open an object to see its API preview.'); break; } S.api = !S.api; document.body.classList.toggle('cp-collapsed', S.api); render(); break;
-		case 'reset': { init(); $('#toasts').innerHTML = ''; render(); break; }
+		case 'reset': { const v = S.variant; init(v); $('#toasts').innerHTML = ''; render(); break; }
 	}
 });
 document.addEventListener('input', e => {
+	if (e.target.id === 'pq') {
+		const P = draft(); P.q = e.target.value;
+		if (P === S.panel) { renderPanel(); bindDrag(); } else render();
+		const n = $('#pq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); return;
+	}
 	if (e.target.id === 'q' && S.view === 'definition') {
 		S.q = e.target.value; render(); const n = $('#q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length);
 	}
 });
 document.addEventListener('keydown', e => {
-	if (e.key === 'Escape') { if (document.querySelector('.dd.is-open')) document.querySelectorAll('.dd.is-open').forEach(d => d.classList.remove('is-open')); else if (S.panel) { S.panel = null; render(); } }
+	if (e.key === 'Escape') { if (document.querySelector('.dd.is-open')) document.querySelectorAll('.dd.is-open').forEach(d => d.classList.remove('is-open')); else if (S.confirm) { S.confirm = null; renderPanel(); } else if (S.panel) { S.panel = null; render(); } }
 });
 // Collapsible Control Panel groups (from the DXP shell)
 document.querySelectorAll('.control-panel__group-header').forEach(btn => {
