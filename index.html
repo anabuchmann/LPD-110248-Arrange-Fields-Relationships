@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LPD-110248 Arrange Fields and Relationships - Objects</title>
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="components.css">
+<script src="icons.js"></script>
+<style>
+/* Prototype-only layout glue. Tokens only. */
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body { display: grid; grid-template-columns: 320px 1fr; height: 100vh; overflow: hidden; background: var(--color-white); font-family: var(--font-family-base); color: var(--color-dark); transition: grid-template-columns 200ms ease; }
+body.cp-collapsed { grid-template-columns: 0 1fr; }
+body.cp-collapsed .control-panel { width: 0; overflow: hidden; border-right-width: 0; }
+.control-panel { height: 100vh; }
+.control-panel__body { overflow-y: auto; }
+.cp-actions { display: flex; gap: var(--spacing-2); margin-left: auto; }
+.cp-badge { align-self: flex-start; margin: var(--spacing-3) var(--spacing-3) var(--spacing-1); }
+.right-col { display: flex; flex-direction: column; min-width: 0; height: 100vh; overflow: hidden; }
+.page { flex: 1 1 auto; overflow-y: auto; min-width: 0; }
+
+/* Objects list */
+.objects { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: var(--spacing-7); padding: var(--spacing-7); }
+.objects .vert-nav__item { text-decoration: none; }
+.table__title { text-decoration: none; color: var(--color-dark); font-weight: var(--font-weight-bold); }
+.table__title:hover { color: var(--color-primary); }
+/* DXP Frontend Data Set look: gray header labels with column dividers, zebra starting on row 1,
+   bold title column, actions column separated by a left border. */
+.table { border: 1px solid var(--color-secondary-l3); }
+.table thead th { color: var(--color-secondary); font-weight: var(--font-weight-bold); background: var(--color-white); border-right: 1px solid var(--color-secondary-l3); white-space: nowrap; }
+.table thead th:last-child, .table thead th.cell-actions { border-right: 0; }
+.table tbody tr:nth-child(odd) { background: var(--color-light-l1); }
+.table tbody tr:nth-child(even) { background: var(--color-white); }
+.table td.cell-actions, .table th.cell-actions { border-left: 1px solid var(--color-secondary-l3); text-align: center; }
+.th-sort { display: flex; align-items: center; justify-content: space-between; gap: var(--spacing-2); }
+/* View Builder list (Arrange panel): plain rows with dividers, no zebra */
+.table--builder tbody tr:nth-child(odd), .table--builder tbody tr:nth-child(even) { background: var(--color-white); }
+.table--builder thead th { color: var(--color-dark); border-right: 0; font-weight: var(--font-weight-semi); }
+.table--builder td.cell-actions, .table--builder th.cell-actions { border-left: 0; }
+.cell-sub > .txt { opacity: .7; }
+.table.table--auto { table-layout: auto; }
+.table--auto td { white-space: nowrap; }
+.table--auto td.wrap { white-space: normal; }
+.table--auto thead th { white-space: normal; }
+.folders__head { display: flex; align-items: center; gap: var(--spacing-2); margin-bottom: var(--spacing-4); }
+.folders__title { font-weight: var(--font-weight-bold); margin-right: auto; }
+.folder-card { border: 1px solid var(--color-secondary-l3); border-radius: var(--rounded-lg); padding: var(--spacing-6); }
+.folder-card__head { display: flex; align-items: flex-start; gap: var(--spacing-4); margin-bottom: var(--spacing-5); }
+.folder-card__title { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); margin: 0; display: flex; align-items: center; gap: var(--spacing-2); }
+.meta { color: var(--color-dark); font-size: var(--font-size-base); }
+.meta span { opacity: .7; }
+
+/* Object definition header */
+.def-header { display: flex; align-items: center; gap: var(--spacing-6); padding: var(--spacing-4) var(--spacing-8); border-bottom: 1px solid var(--color-secondary-l3); }
+.def-header__name { font-size: var(--font-size-xl); font-weight: var(--font-weight-bold); margin: 0 0 var(--spacing-1); }
+.def-header__meta { border-left: 1px solid var(--color-secondary-l2); padding-left: var(--spacing-5); line-height: 1.7; display: flex; flex-direction: column; }
+.def-header__meta b { font-weight: var(--font-weight-bold); }
+.def-header__meta span.k { opacity: .7; margin-right: var(--spacing-2); }
+.def-tabs { padding: 0 var(--spacing-8); border-bottom: 1px solid var(--color-secondary-l3); }
+.def-body { padding: 0 var(--spacing-5) var(--spacing-7); }
+.def-body .management-toolbar { border-bottom: 1px solid var(--color-secondary-l3); margin-bottom: var(--spacing-5); }
+.label--case { text-transform: none; }
+
+/* Tables */
+.table { table-layout: fixed; border-radius: var(--rounded-md); border-collapse: separate; border-spacing: 0; overflow: visible; }
+.table th, .table td { overflow: hidden; text-overflow: ellipsis; }
+.table td.cell-actions, .table th.cell-actions { overflow: visible; text-align: right; }
+.table .table__cell--gutter { padding-left: var(--spacing-3); padding-right: var(--spacing-3); overflow: visible; text-overflow: clip; }
+.nowrap { white-space: nowrap; }
+.item-cell { display: flex; align-items: center; gap: var(--spacing-3); min-width: 0; }
+.item-cell__text { min-width: 0; }
+.item-cell__text > * { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.item-sub { font-size: var(--font-size-sm); opacity: .7; }
+.pos-chip { font-variant-numeric: tabular-nums; }
+.hint { display: flex; align-items: center; gap: var(--spacing-2); font-size: var(--font-size-sm); margin: 0 0 var(--spacing-4); }
+.hint svg { opacity: .7; }
+tr.dragging { opacity: .4; }
+tr.drop-target td { box-shadow: inset 0 2px 0 var(--color-primary); }
+tr.is-moved td { background: var(--color-primary-l3); }
+.drag-handle { cursor: grab; }
+.drag-handle:disabled { cursor: not-allowed; }
+
+/* Dropdown anchoring */
+.dd { position: relative; display: inline-flex; }
+.dd > .dropdown { position: absolute; top: calc(100% + var(--spacing-1)); right: 0; z-index: 50; min-width: 200px; text-align: left; }
+.dd--left > .dropdown { left: 0; right: auto; }
+.dd:not(.is-open) > .dropdown { display: none; }
+
+/* Arrange panel (View Builder pattern) */
+.scrim { position: fixed; inset: 0; background: var(--color-dark); opacity: .4; z-index: 60; }
+.arrange { position: fixed; top: 0; right: 0; bottom: 0; width: min(1100px, 76vw); z-index: 61; box-shadow: var(--shadow-dropdown); }
+.arrange .side-panel__body { overflow-y: auto; }
+.arrange-card { border: 1px solid var(--color-secondary-l3); border-radius: var(--rounded-md); }
+.arrange-card__head { padding: var(--spacing-5) var(--spacing-6); border-bottom: 1px solid var(--color-secondary-l3); }
+.arrange-card__title { font-size: var(--font-size-lg); font-weight: var(--font-weight-bold); margin: 0 0 var(--spacing-2); }
+.arrange-card__inner { padding: var(--spacing-5) var(--spacing-6) var(--spacing-6); display: flex; flex-direction: column; gap: var(--spacing-4); }
+.arrange .side-panel__footer { justify-content: flex-start; }
+.arrange .side-panel__footer .push { margin-left: auto; }
+
+/* API preview */
+.api { position: fixed; top: 0; right: 0; bottom: 0; z-index: 40; box-shadow: var(--shadow-dropdown); }
+.api pre { margin: 0; font-size: var(--font-size-sm); white-space: pre; }
+body.api-open .right-col { margin-right: 480px; }
+
+/* Toasts and prototype controls */
+.toasts { position: fixed; left: var(--spacing-7); bottom: var(--spacing-7); z-index: 120; display: flex; flex-direction: column; gap: var(--spacing-3); min-width: 340px; }
+.proto-controls { position: fixed; right: var(--spacing-7); bottom: var(--spacing-7); z-index: 55; display: flex; align-items: center; gap: var(--spacing-4); padding: var(--spacing-3) var(--spacing-4); border: 1px solid var(--color-secondary-l2); border-radius: var(--rounded-md); background: var(--color-white); box-shadow: var(--shadow-dropdown); font-size: var(--font-size-sm); }
+body.api-open .proto-controls { right: calc(480px + var(--spacing-7)); }
+.proto-controls__label { font-weight: var(--font-weight-bold); }
+</style>
+</head>
+<body>
+
+<!-- ═════════ Control Panel ═════════ -->
+<aside class="control-panel" id="control-panel" tabindex="-1">
+	<div class="control-panel__header">
+		<span class="control-panel__sticker"><svg class="lexicon-icon"><use href="#control-panel"></use></svg></span>
+		<span class="control-panel__title">Control Panel</span>
+		<div class="cp-actions">
+			<button class="btn btn--borderless btn--sm btn--icon" type="button" aria-label="Sites"><svg class="lexicon-icon"><use href="#sites"></use></svg></button>
+			<button class="btn btn--borderless btn--sm btn--icon" type="button" aria-label="Close" data-action="toggleCp"><svg class="lexicon-icon"><use href="#times"></use></svg></button>
+		</div>
+	</div>
+	<div class="control-panel__search">
+		<div class="search">
+			<input class="input__field search__field" type="search" placeholder="Search" aria-label="Search Control Panel">
+			<button class="search__submit" aria-label="Search" type="button"><svg class="lexicon-icon"><use href="#search"></use></svg></button>
+		</div>
+	</div>
+	<div class="control-panel__body">
+		<ul class="control-panel__groups">
+			<li class="control-panel__group">
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#home"></use></svg></span>Home</button>
+			</li>
+			<li class="control-panel__group">
+				<span class="label label--sm label--danger cp-badge">System</span>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#hdd"></use></svg></span>System Settings</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#bell-on"></use></svg></span>Push Notifications</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#box-container"></use></svg></span>Components</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#search"></use></svg></span>Search</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#sheets"></use></svg></span>Job Scheduler</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#code"></use></svg></span>Gogo Shell</button>
+			</li>
+			<li class="control-panel__group">
+				<span class="label label--sm label--info cp-badge">Instance: Liferay</span>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#cog"></use></svg></span>Instance Settings</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#custom-field"></use></svg></span>Custom Fields</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#automatic-translate"></use></svg></span>Language Override</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#picture"></use></svg></span>Adaptive Media</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#flag-full"></use></svg></span>Countries</button>
+			</li>
+			<li class="control-panel__group">
+				<button class="control-panel__group-header" type="button" aria-expanded="false">Sites <svg class="lexicon-icon"><use href="#angle-down-small"></use></svg></button>
+			</li>
+			<li class="control-panel__group">
+				<button class="control-panel__group-header" type="button" aria-expanded="false">Users <svg class="lexicon-icon"><use href="#angle-down-small"></use></svg></button>
+			</li>
+			<li class="control-panel__group">
+				<button class="control-panel__group-header" type="button" aria-expanded="true">Object <svg class="lexicon-icon"><use href="#angle-down-small"></use></svg></button>
+				<button class="control-panel__item is-active" type="button" data-action="goObjects"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#diagram"></use></svg></span>Objects</button>
+				<button class="control-panel__item" type="button"><span class="control-panel__item-icon"><svg class="lexicon-icon"><use href="#list-ul"></use></svg></span>Picklists</button>
+			</li>
+		</ul>
+	</div>
+</aside>
+
+<!-- ═════════ Right column ═════════ -->
+<div class="right-col">
+	<header class="control-menu">
+		<div class="control-menu__left">
+			<div class="control-menu__btns" id="cmBtns"></div>
+			<span class="control-menu__title" id="cmTitle">Objects</span>
+		</div>
+		<div class="control-menu__right">
+			<button class="control-menu__btn" type="button" aria-label="Open Applications Menu"><svg class="lexicon-icon"><use href="#grid"></use></svg></button>
+			<span class="sticker sticker--lg sticker--circle sticker--outline sticker--warning" role="img" aria-label="Ana Buchmann"><svg class="lexicon-icon"><use href="#user"></use></svg></span>
+		</div>
+	</header>
+	<main class="page" id="lpdPage"></main>
+</div>
+
+<div id="lpdOverlay"></div>
+<div id="apiRoot"></div>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<!-- Prototype controls — not part of the product UI -->
+<div class="proto-controls" role="group" aria-label="Prototype Controls">
+	<span class="proto-controls__label">Prototype</span>
+	<button class="btn btn--borderless btn--xs" type="button" data-action="toggleApi"><svg class="lexicon-icon lexicon-icon-sm"><use href="#code"></use></svg>API Preview</button>
+	<button class="btn btn--borderless btn--xs" type="button" data-action="reset"><svg class="lexicon-icon lexicon-icon-sm"><use href="#reload"></use></svg>Reset</button>
+</div>
+
+<script>
+(function () {
+/* ══════════ Data ══════════ */
+const SYSTEM = [
+	['creator','Author','Text'],['createDate','Create Date','Date'],['externalReferenceCode','External Reference Code','Text'],
+	['displayDate','Display Date','Date Time'],['expirationDate','Expiration Date','Date Time'],['reviewDate','Review Date','Date Time'],
+	['id','ID','Long Integer'],['modifiedDate','Modified Date','Date'],['status','Status','Text']
+].map(([key,label,type]) => ({key,label,type,kind:'field',source:'System'}));
+
+const DEFS = {
+	thread: {
+		label:'Thread', id:59494, erc:'5fffed35-f204-0ece-094d-1c67df9204da',
+		items: [...SYSTEM,
+			{key:'title', label:'Title', type:'Text', kind:'field', source:'Custom'},
+			{key:'threadMessages', label:'Thread Messages', type:'oneToMany', kind:'relationship', source:'Custom', related:'Message', hierarchy:'Parent'}
+		]
+	},
+	message: {
+		label:'Message', id:59511, erc:'8a1c42e0-77b5-4f0c-b1d2-3e9a6c1f7d24',
+		items: [...SYSTEM,
+			{key:'body', label:'Body', type:'Long Text', kind:'field', source:'Custom', mandatory:true},
+			{key:'r_threadMessages_c_threadId', label:'Thread Messages', type:'Relationship', kind:'relField', source:'Custom', related:'Thread', hierarchy:'Child', relName:'threadMessages'}
+		]
+	}
+};
+
+const OBJECT_ROWS = [
+	['Account','Yes','Nov 10, 2026, 5:44:41 PM'],['Commerce Product','Yes','Nov 10, 2026, 5:44:41 PM'],['Commerce Order Note','Yes','Nov 10, 2026, 5:44:41 PM'],
+	['Postal Address','Yes','Nov 10, 2026, 5:44:42 PM'],['User','Yes','Nov 10, 2026, 5:44:42 PM'],['Organization','Yes','Nov 10, 2026, 5:44:46 PM'],
+	['PR Attachment Size','No','Nov 10, 2026, 8:49:14 PM'],['LPD103110 Ticket','No','Nov 10, 2026, 9:35:22 PM'],
+	['Thread','No','Nov 11, 2026, 9:58:52 AM','thread'],['Message','No','Nov 11, 2026, 9:58:54 AM','message'],['PTR9521 Test','No','Nov 12, 2026, 3:21:10 PM']
+];
+const FOLDERS = ['Default','CMS Content Settings','CMS Content Structures','CMS File Types','CMS Structure Repeatable...','DSR Structures','CMP Project Management ...','My Objects'];
+const TYPE_ICON = {'Text':'text','Long Text':'paragraph','Date':'calendar','Date Time':'date-time','Long Integer':'integer','Decimal':'decimal','Boolean':'check-square','Picklist':'list-ul'};
+
+/* ══════════ State ══════════ */
+let S;
+function init() {
+	S = {view:'objects', def:'thread', tab:'fields', sort:null, q:'', filter:'all', panel:null, api:false, undo:null, data:{}};
+	for (const k in DEFS) S.data[k] = {ordered:false, items: DEFS[k].items.map((i, idx) => ({...i, priority:0, created:idx}))};
+}
+init();
+
+/* ══════════ Helpers ══════════ */
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ic = (n, cls='') => `<svg class="lexicon-icon ${cls}" aria-hidden="true"><use href="#${n}"></use></svg>`;
+const def = () => DEFS[S.def];
+const dat = () => S.data[S.def];
+// Saved order: priority, then creation date as tiebreaker. Never arranged = everything 0 = creation order.
+const ordered = items => [...items].sort((a,b) => (a.priority - b.priority) || (a.created - b.created));
+const isField = i => i.kind === 'field' || i.kind === 'relField';
+const isRel = i => i.kind !== 'field';
+const srcLabel = s => `<span class="label label--sm label--case ${s==='System'?'label--info':'label--warning'}">${s}</span>`;
+const hierLabel = h => h ? `<span class="label label--sm label--case ${h==='Parent'?'label--success':'label--info'}">${h}</span>` : '';
+const typeIcon = i => isRel(i) ? 'link' : (TYPE_ICON[i.type] || 'text');
+function itemCell(i, link = true) {
+	return link ? `<a href="#" class="table__title">${esc(i.label)}</a>` : `<span class="table__title">${esc(i.label)}</span>`;
+}
+function kebab(id, items) {
+	return `<span class="dd" data-dd="${id}"><button class="btn btn--borderless btn--sm btn--icon" type="button" aria-label="More Actions" data-action="dd" data-id="${id}">${ic('ellipsis-v')}</button>
+		<ul class="dropdown" role="menu">${items}</ul></span>`;
+}
+const ddItem = (text, attrs = '', disabled = false) => `<li><button class="dropdown__item" role="menuitem" type="button" ${attrs} ${disabled?'disabled':''}><span class="dropdown__item-text">${text}</span></button></li>`;
+function search(placeholder = 'Search', value = '') {
+	return `<div class="management-toolbar__search"><div class="search">
+		<input class="input__field search__field" type="search" placeholder="${placeholder}" aria-label="Search" id="q" value="${esc(value)}">
+		<button class="search__submit" aria-label="Search" type="button">${ic('search')}</button></div></div>`;
+}
+function pagination(n) {
+	return `<nav class="pagination" aria-label="Pagination">
+		<button class="pagination__size btn btn--borderless btn--sm" type="button">20 Items ${ic('caret-bottom')}</button>
+		<span class="pagination__summary">Showing 1 to ${n} of ${n} entries.</span>
+		<ul class="pagination__pages">
+			<li><button class="pagination__btn" aria-label="Previous" type="button" disabled>${ic('angle-left')}</button></li>
+			<li><button class="pagination__btn is-active" aria-current="page" type="button">1</button></li>
+			<li><button class="pagination__btn" aria-label="Next" type="button" disabled>${ic('angle-right')}</button></li>
+		</ul></nav>`;
+}
+
+/* ══════════ Render ══════════ */
+function render() {
+	document.body.classList.toggle('api-open', S.api);
+	const back = S.view === 'definition' ? `<button class="control-menu__btn" type="button" aria-label="Back" data-action="goObjects">${ic('angle-left')}</button>` : '';
+	$('#cmBtns').innerHTML = `<button class="control-menu__btn" type="button" aria-label="Toggle Product Menu" data-action="toggleCp">${ic(document.body.classList.contains('cp-collapsed') ? 'product-menu-closed' : 'product-menu-open')}</button>${back}`;
+	$('#cmTitle').textContent = S.view === 'definition' ? def().label : 'Objects';
+	const page = $('#lpdPage'), key = S.view + S.def;
+	page.innerHTML = S.view === 'objects' ? renderObjects() : renderDefinition();
+	if (render.last !== key) { page.scrollTop = 0; render.last = key; }
+	renderPanel(); renderApi(); bindDrag();
+}
+
+function renderObjects() {
+	const rows = OBJECT_ROWS.map(([label, sys, date, key]) => `<tr>
+		<td><a href="#" class="table__title" ${key ? `data-action="openDef" data-def="${key}"` : 'data-action="notInProto"'}>${label}</a></td>
+		<td><span class="label label--sm label--case label--bold label--secondary">Standard</span></td>
+		<td>company</td><td>${sys}</td><td class="wrap">${date}</td>
+		<td><span class="label label--sm label--case label--success">Approved</span></td>
+		<td class="cell-actions table__cell--gutter">${kebab('obj-'+label.replace(/\W/g,''), ddItem('Edit') + ddItem('Delete'))}</td></tr>`).join('');
+	return `<div class="objects">
+		<nav aria-label="Object Folders">
+			<div class="folders__head"><span class="folders__title">Object Folders</span>
+				<button class="btn btn--borderless btn--sm btn--icon" type="button" aria-label="Add Folder">${ic('plus')}</button>
+				<button class="btn btn--borderless btn--sm btn--icon" type="button" aria-label="More Actions">${ic('ellipsis-v')}</button></div>
+			<ul class="vert-nav__list">${FOLDERS.map((f,i) => `<li><a href="#" class="vert-nav__item ${i===0?'is-active':''}" ${i===0?'aria-current="page"':''}>${f}</a></li>`).join('')}</ul>
+		</nav>
+		<section class="folder-card">
+			<div class="folder-card__head">
+				<div><h1 class="folder-card__title">Default <button class="btn btn--borderless btn--xs btn--icon" type="button" aria-label="More Actions">${ic('ellipsis-v')}</button></h1>
+				<div class="meta"><span>ERC:</span> <strong>default</strong></div></div>
+				<button class="btn btn--secondary btn--sm" type="button" style="margin-left:auto">View in Model Builder</button>
+			</div>
+			<div class="management-toolbar"><div class="management-toolbar__bar">${search()}<button class="btn btn--primary btn--sm" type="button">Create New Object</button></div></div>
+			<table class="table table--hover table--auto" aria-label="Objects">
+				<thead><tr><th><span class="th-sort">Label ${ic('order-arrow')}</span></th><th>Permission Inheritance</th><th>Scope</th><th>System</th><th><span class="th-sort">Modified Date ${ic('order-arrow')}</span></th><th>Status</th><th class="cell-actions"></th></tr></thead>
+				<tbody>${rows}</tbody></table>
+		</section></div>`;
+}
+
+function renderDefinition() {
+	const tabs = [['details','Details'],['fields','Fields'],['relationships','Relationships'],['layouts','Layouts'],['actions','Actions'],['views','Views'],['validations','Validations'],['state','State Manager']];
+	let body;
+	if (S.tab === 'fields' || S.tab === 'relationships') body = renderA();
+	else body = `<div class="empty-state" style="padding-top: var(--spacing-9)"><div class="empty-state__media"><img src="illustration-telescope.svg" alt=""></div><h2 class="empty-state__title">Not Part of This Prototype</h2><p class="empty-state__text">Open the Fields or Relationships tab.</p></div>`;
+	return `<div class="def-header">
+			<div><h1 class="def-header__name">${def().label}</h1>
+				<span class="label label--sm label--case label--bold label--secondary">Standard</span> <span class="label label--sm label--case label--warning">Custom</span></div>
+			<div class="def-header__meta"><span><span class="k">ID:</span><b>${def().id}</b></span>
+				<span><span class="k">ERC:</span><b>${def().erc}</b> <button class="btn btn--borderless btn--xs btn--icon" type="button" aria-label="Help">${ic('question-circle')}</button><button class="btn btn--borderless btn--xs btn--icon" type="button" aria-label="Edit ERC">${ic('pencil')}</button></span></div>
+		</div>
+		<div class="def-tabs"><nav class="navbar"><ul class="navbar__list">${tabs.map(([k,l]) => `<li><a href="#" class="navbar__item ${S.tab===k?'is-active':''}" ${S.tab===k?'aria-current="page"':''} data-action="tab" data-tab="${k}">${l}</a></li>`).join('')}</ul></nav></div>
+		<div class="def-body">${body}</div>`;
+}
+
+function filterQ(list) {
+	const q = S.q.trim().toLowerCase();
+	return q ? list.filter(i => i.label.toLowerCase().includes(q) || i.key.toLowerCase().includes(q)) : list;
+}
+function sortHead(label) {
+	const sym = S.sort === 'asc' ? 'order-arrow-up' : S.sort === 'desc' ? 'order-arrow-down' : 'order-arrow';
+	return `<span class="th-sort">${label}<button class="btn btn--borderless btn--xs btn--icon" type="button" aria-label="Sort by ${label}" data-action="sort">${ic(sym)}</button></span>`;
+}
+const colsGutter = `<th class="cell-actions"><button class="btn btn--borderless btn--xs btn--icon" type="button" aria-label="Manage Columns Visibility">${ic('caret-bottom','lexicon-icon-sm')}</button></th>`;
+
+/* ── Variant A: tabs as today + Arrange panel ── */
+function renderA() {
+	const all = ordered(dat().items);
+	const isF = S.tab === 'fields';
+	let list = filterQ(all.filter(i => isF ? isField(i) : isRel(i)));
+	if (S.sort) list = [...list].sort((a,b) => (S.sort === 'asc' ? 1 : -1) * a.label.localeCompare(b.label));
+	const editBtn = `<button class="btn btn--secondary btn--sm btn--icon" type="button" aria-label="Edit">${ic('pencil')}</button>`;
+	const rows = list.map(i => isF
+		? `<tr><td>${itemCell(i)}</td><td>${i.kind==='relField'?'Relationship':i.type}</td><td>${i.mandatory?'Yes':'No'}</td><td>${srcLabel(i.source)}</td><td>No</td>
+			<td class="cell-actions table__cell--gutter">${i.source==='System' || i.kind==='relField' ? editBtn : kebab('a-'+i.key, ddItem('Edit') + ddItem('Delete'))}</td></tr>`
+		: `<tr><td>${itemCell(i)}</td><td>${i.related}</td><td>oneToMany</td><td>${hierLabel(i.hierarchy)}</td><td><span class="label label--sm label--case label--bold label--secondary">Standard</span></td><td>${srcLabel(i.source)}</td>
+			<td class="cell-actions table__cell--gutter">${kebab('a-'+i.key, ddItem('Edit') + ddItem('Delete'))}</td></tr>`).join('');
+	const head = isF
+		? `<colgroup><col><col style="width:16%"><col style="width:12%"><col style="width:12%"><col style="width:12%"><col style="width:64px"></colgroup>
+			<thead><tr><th>${sortHead('Label')}</th><th>Type</th><th>Mandatory</th><th>Source</th><th>Translatable</th>${colsGutter}</tr></thead>`
+		: `<colgroup><col><col style="width:14%"><col style="width:12%"><col style="width:11%"><col style="width:17%"><col style="width:11%"><col style="width:64px"></colgroup>
+			<thead><tr><th>${sortHead('Label')}</th><th>Related Object</th><th>Type</th><th>Hierarchy</th><th>Permission Inheritance</th><th>Source</th>${colsGutter}</tr></thead>`;
+	const sortBar = S.sort ? `<div class="management-toolbar__results"><span class="management-toolbar__results-text">Sorted by label for viewing only. The saved order did not change.</span><button class="management-toolbar__results-clear btn btn--borderless btn--sm" type="button" data-action="clearSort">Show Saved Order</button></div>` : '';
+	return `<div class="management-toolbar"><div class="management-toolbar__bar">${search('Search', S.q)}
+			<button class="btn btn--secondary btn--sm" type="button" data-action="openArrange">Arrange</button>
+			<button class="btn btn--primary btn--sm" type="button" data-action="add">${isF ? 'Add Object Field' : 'Add Object Relationship'}</button></div>${sortBar}</div>
+		<table class="table table--hover" aria-label="${isF ? 'Fields' : 'Relationships'}">${head}<tbody>${rows}</tbody></table>
+		${pagination(list.length)}`;
+}
+
+/* ── Arrange side panel (View Builder pattern) ── */
+function openArrange() {
+	S.panel = {list: ordered(dat().items).map(i => ({...i})), moved: new Set(), q:'', reset:false};
+	render();
+	setTimeout(() => { const t = $('.arrange .side-panel__close'); if (t) t.focus(); }, 0);
+}
+function renderPanel() {
+	const root = $('#lpdOverlay');
+	if (!S.panel) { root.innerHTML = ''; return; }
+	if (S.panel.type === 'add') return renderAddModal(root);
+	const P = S.panel, q = P.q.trim().toLowerCase(), N = P.list.length;
+	const rows = P.list.map((i, idx) => {
+		if (q && !i.label.toLowerCase().includes(q) && !i.key.toLowerCase().includes(q)) return '';
+		const moved = P.moved.has(i.key);
+		const sub = isRel(i) ? 'Relationship' : i.type;
+		return `<tr class="${moved?'is-moved':''}" draggable="${q?'false':'true'}" data-idx="${idx}" data-zone="panel">
+			<td class="table__cell--gutter"><button class="btn btn--borderless btn--sm btn--icon drag-handle" type="button" ${q?'disabled':''} aria-label="Drag ${esc(i.label)}" title="Drag to arrange">${ic('drag')}</button></td>
+			<td>${itemCell(i, false)}</td>
+			<td class="cell-sub"><span class="txt">${sub}</span> ${isRel(i) ? hierLabel(i.hierarchy) : ''}</td>
+			<td>${srcLabel(i.source)} ${moved ? '<span class="label label--sm label--case label--primary">Moved</span>' : ''}</td>
+			<td class="cell-actions table__cell--gutter">${kebab('p-'+i.key,
+				ddItem('Move to Top', `data-action="pMove" data-from="${idx}" data-to="0"`, idx===0) +
+				ddItem('Move Up', `data-action="pMove" data-from="${idx}" data-to="${idx-1}"`, idx===0) +
+				ddItem('Move Down', `data-action="pMove" data-from="${idx}" data-to="${idx+1}"`, idx===N-1) +
+				ddItem('Move to Bottom', `data-action="pMove" data-from="${idx}" data-to="${N-1}"`, idx===N-1))}</td></tr>`;
+	}).join('');
+	root.innerHTML = `<div class="scrim" data-action="closePanel"></div>
+	<aside class="side-panel arrange" role="dialog" aria-modal="true" aria-labelledby="arrTitle">
+		<header class="side-panel__header"><h2 class="side-panel__title" id="arrTitle">Arrange Fields and Relationships</h2>
+			<button class="btn btn--borderless btn--icon side-panel__close" type="button" aria-label="Close" data-action="closePanel">${ic('times')}</button></header>
+		<div class="side-panel__body">
+			<section class="arrange-card">
+				<div class="arrange-card__head"><h3 class="arrange-card__title">Order</h3>
+					<p style="margin:0">Drag items, or use the actions menu, to set the order of fields and relationships for ${def().label}. The API and the default entry form use this order.</p></div>
+				<div class="arrange-card__inner">
+					${!dat().ordered ? `<div class="alert alert--info"><div class="alert__content">${ic('info-circle')}<p class="alert__text">This object was never arranged. Items are listed by creation date.</p></div></div>` : ''}
+					<div class="search"><input class="input__field search__field" type="search" placeholder="Search" aria-label="Search Fields and Relationships" id="pq" value="${esc(P.q)}"><button class="search__submit" aria-label="Search" type="button">${ic('search')}</button></div>
+					${q ? `<div class="alert alert--warning"><div class="alert__content">${ic('warning-full')}<p class="alert__text">Dragging is off while searching. Use the actions menu, or clear the search.</p></div></div>` : ''}
+					<table class="table table--builder" aria-label="Fields and Relationships Order">
+						<colgroup><col style="width:56px"><col><col style="width:30%"><col style="width:18%"><col style="width:56px"></colgroup>
+						<thead><tr><th class="table__cell--gutter" aria-label="Drag"></th><th>Name</th><th>Type</th><th>Source</th><th class="cell-actions"></th></tr></thead>
+						<tbody id="panelBody">${rows}</tbody></table>
+				</div>
+			</section>
+		</div>
+		<footer class="side-panel__footer">
+			<button class="btn btn--secondary" type="button" data-action="closePanel">Cancel</button>
+			<button class="btn btn--primary" type="button" data-action="savePanel">Save</button>
+		</footer>
+	</aside>`;
+	const pq = $('#pq');
+	pq.oninput = e => { P.q = e.target.value; renderPanel(); bindDrag(); const n = $('#pq'); n.focus(); n.setSelectionRange(n.value.length, n.value.length); };
+}
+function movePanel(from, to) {
+	const L = S.panel.list; if (to < 0 || to >= L.length || from === to) return;
+	const [it] = L.splice(from, 1); L.splice(to, 0, it); S.panel.moved.add(it.key); S.panel.reset = false;
+	renderPanel(); bindDrag();
+}
+
+/* ── Add field / relationship (shows "added at the end") ── */
+function renderAddModal(root) {
+	const rel = S.panel.rel;
+	root.innerHTML = `<div class="modal-overlay"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="addTitle">
+		<header class="modal__header"><h2 class="modal__title" id="addTitle">${rel ? 'New Relationship' : 'New Field'}</h2>
+			<button class="btn btn--borderless btn--icon modal__close" type="button" aria-label="Close" data-action="closePanel">${ic('times')}</button></header>
+		<div class="modal__body" style="display:flex;flex-direction:column;gap:var(--spacing-4)">
+			<div class="input"><label class="input__label" for="nfLabel">Label</label><input class="input__field" id="nfLabel" value="${rel ? 'Thread Tags' : 'Pinned'}"></div>
+			<div class="input"><label class="input__label" for="nfType">${rel ? 'Related Object' : 'Type'}</label>
+				<select class="input__field" id="nfType">${rel ? '<option>Tag</option>' : '<option>Boolean</option><option>Text</option><option>Date</option>'}</select></div>
+			<p class="item-sub" style="margin:0">New items are added at the end of the order.</p>
+		</div>
+		<footer class="modal__footer"><button class="btn btn--secondary" type="button" data-action="closePanel">Cancel</button><button class="btn btn--primary" type="button" data-action="saveNew">Save</button></footer>
+	</div></div>`;
+}
+function saveNew() {
+	const label = $('#nfLabel').value.trim() || 'New Field', type = $('#nfType').value, d = dat();
+	materialize();
+	const max = Math.max(...d.items.map(i => i.priority));
+	const key = label.replace(/\W+(.)?/g, (m,c) => c ? c.toUpperCase() : '').replace(/^./, c => c.toLowerCase());
+	d.items.push(S.panel.rel ? {key, label, type:'oneToMany', kind:'relationship', source:'Custom', related:type, hierarchy:'Parent', priority:max+1, created:d.items.length}
+		: {key, label, type, kind:'field', source:'Custom', priority:max+1, created:d.items.length});
+	S.panel = null; toast(`${esc(label)} was added at the end of the order.`); render();
+}
+function materialize() { const d = dat(); ordered(d.items).forEach((i, idx) => i.priority = idx + 1); d.ordered = true; }
+
+/* ── API preview ── */
+function renderApi() {
+	const root = $('#apiRoot');
+	if (!S.api || S.view !== 'definition') { root.innerHTML = ''; document.body.classList.remove('api-open'); return; }
+	const all = ordered(dat().items), d = dat();
+	const pr = i => d.ordered ? i.priority : 0;
+	const json = JSON.stringify({
+		name: def().label,
+		objectFields: all.filter(isField).map(i => ({name:i.key, businessType: i.kind==='relField' ? 'Relationship' : i.type, priority: pr(i)})),
+		objectRelationships: all.filter(isRel).map(i => ({name: i.relName || i.key, type:'oneToMany', reverse: i.hierarchy==='Child', priority: pr(i)}))
+	}, null, 2);
+	root.innerHTML = `<aside class="side-panel side-panel--lg api" aria-label="API Preview">
+		<header class="side-panel__header"><h2 class="side-panel__title">API Preview</h2>
+			<button class="btn btn--borderless btn--icon side-panel__close" type="button" aria-label="Close" data-action="toggleApi">${ic('times')}</button></header>
+		<div class="side-panel__body">
+			<p class="item-sub" style="margin-top:0">GET /o/object-admin/v1.0/object-definitions/${def().id}</p>
+			<p>Two arrays, one shared sequence of positions. ${d.ordered ? 'Merge both arrays by priority to get the single order.' : 'Never arranged: every priority is 0 and items fall back to creation order.'}${S.def==='message' ? ' The child side relationship takes its position from its field.' : ''}</p>
+			<pre>${esc(json)}</pre></div></aside>`;
+}
+
+/* ── Drag and drop (rows) ── */
+function bindDrag() {
+	let from = null;
+	document.querySelectorAll('tr[draggable="true"]').forEach(tr => {
+		tr.addEventListener('dragstart', e => { from = +tr.dataset.idx; tr.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(from)); });
+		tr.addEventListener('dragend', () => tr.classList.remove('dragging'));
+		tr.addEventListener('dragover', e => { e.preventDefault(); tr.classList.add('drop-target'); });
+		tr.addEventListener('dragleave', () => tr.classList.remove('drop-target'));
+		tr.addEventListener('drop', e => { e.preventDefault(); tr.classList.remove('drop-target'); const to = +tr.dataset.idx; if (from === null) return;
+			movePanel(from, to); from = null; });
+	});
+}
+
+/* ── Toast ── */
+let tt;
+function toast(msg, undo) {
+	$('#toasts').innerHTML = `<div class="alert alert--toast alert--success" role="status"><div class="alert__content">${ic('check-circle-full')}<p class="alert__text">${msg}</p></div>
+		${undo ? '<div class="alert__actions"><button class="btn btn--borderless btn--sm" type="button" data-action="undo">Undo</button></div>' : ''}
+		<button class="btn btn--borderless btn--sm btn--icon alert__close" type="button" aria-label="Close" data-action="closeToast">${ic('times')}</button></div>`;
+	clearTimeout(tt); tt = setTimeout(() => $('#toasts').innerHTML = '', 6000);
+}
+
+/* ══════════ Events ══════════ */
+document.addEventListener('click', e => {
+	const t = e.target.closest('[data-action]');
+	document.querySelectorAll('.dd.is-open').forEach(d => { if (!t || t.dataset.action !== 'dd' || d.dataset.dd !== t.dataset.id) d.classList.remove('is-open'); });
+	if (!t) return;
+	const a = t.dataset.action;
+	if (t.tagName === 'A') e.preventDefault();
+	switch (a) {
+		case 'dd': t.closest('.dd').classList.toggle('is-open'); break;
+		case 'toggleCp': document.body.classList.toggle('cp-collapsed'); render(); break;
+		case 'goObjects': S.view = 'objects'; S.panel = null; render(); break;
+		case 'openDef': S.view = 'definition'; S.def = t.dataset.def; S.tab = 'fields'; S.q = ''; S.sort = null; S.filter = 'all'; render(); break;
+		case 'notInProto': toast('Open Thread or Message. Other objects are not part of this prototype.'); break;
+		case 'tab': S.tab = t.dataset.tab; S.q = ''; S.sort = null; render(); break;
+		case 'sort': S.sort = S.sort === null ? 'asc' : S.sort === 'asc' ? 'desc' : null; render(); break;
+		case 'clearSort': S.sort = null; render(); break;
+		case 'openArrange': openArrange(); break;
+		case 'closePanel': S.panel = null; render(); break;
+		case 'pMove': movePanel(+t.dataset.from, +t.dataset.to); break;
+		case 'savePanel': {
+			const d = dat();
+			S.panel.list.forEach((p, idx) => d.items.find(x => x.key === p.key).priority = idx + 1); d.ordered = true;
+			S.panel = null; toast('Order saved.'); render(); break; }
+		case 'add': S.panel = {type:'add', rel: t.dataset.rel ? t.dataset.rel === '1' : S.tab === 'relationships'}; render(); break;
+		case 'saveNew': saveNew(); break;
+		case 'closeToast': $('#toasts').innerHTML = ''; break;
+		case 'toggleApi': if (S.view !== 'definition') { toast('Open an object to see its API preview.'); break; } S.api = !S.api; document.body.classList.toggle('cp-collapsed', S.api); render(); break;
+		case 'reset': { init(); $('#toasts').innerHTML = ''; render(); break; }
+	}
+});
+document.addEventListener('input', e => {
+	if (e.target.id === 'q' && S.view === 'definition') {
+		S.q = e.target.value; render(); const n = $('#q'); n.focus(); n.setSelectionRange(n.value.length, n.value.length);
+	}
+});
+document.addEventListener('keydown', e => {
+	if (e.key === 'Escape') { if (document.querySelector('.dd.is-open')) document.querySelectorAll('.dd.is-open').forEach(d => d.classList.remove('is-open')); else if (S.panel) { S.panel = null; render(); } }
+});
+// Collapsible Control Panel groups (from the DXP shell)
+document.querySelectorAll('.control-panel__group-header').forEach(btn => {
+	btn.addEventListener('click', () => {
+		const open = btn.getAttribute('aria-expanded') !== 'true';
+		btn.setAttribute('aria-expanded', String(open));
+		btn.parentElement.querySelectorAll('.control-panel__item').forEach(el => el.style.display = open ? '' : 'none');
+	});
+});
+
+render();
+const cpb = document.querySelector('.control-panel__body'); cpb.scrollTop = cpb.scrollHeight;
+})();
+</script>
+</body>
+</html>
